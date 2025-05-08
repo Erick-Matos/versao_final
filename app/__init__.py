@@ -10,29 +10,35 @@ migrate = Migrate()
 
 
 def create_app():
-    # Create Flask app with correct static and template folders
-    app = Flask(__name__, static_folder='static', template_folder='templates')
+    # Como __name__ é 'app', o root_path será .../app
+    # Então "../templates" aponta para <project_root>/templates
+    app = Flask(
+        __name__,
+        static_folder='../static',
+        template_folder='../templates',
+        static_url_path='/static'
+    )
     app.config.from_object('config.Config')
 
-    # Configure CORS
-    origins = app.config['CORS_ORIGINS'].split(',') if app.config['CORS_ORIGINS'] else ['*']
+    # CORS
+    origins = app.config.get('CORS_ORIGINS', '')
+    origins = origins.split(',') if origins else ['*']
     CORS(app, origins=origins)
 
-    # Initialize database and migrations
+    # Database + migrations
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # Register blueprints
+    # Blueprints
     from app.auth.routes import auth_bp
     from app.anuncios.routes import anuncios_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(anuncios_bp)
 
-    # Create tables and default admin if configured
+    # Cria tabelas e admin (se configurado)
     with app.app_context():
         db.create_all()
 
-        # Import inside function to avoid circular imports
         from werkzeug.security import generate_password_hash
         from app.models import Usuario
 
@@ -54,7 +60,7 @@ def create_app():
                 db.session.add(admin)
                 db.session.commit()
 
-    # Core routes
+    # Rotas principais
     @app.route('/')
     def home():
         return render_template('index.html')
