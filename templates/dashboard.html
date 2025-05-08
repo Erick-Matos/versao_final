@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard - Adote um amigo!</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+  <header class="dashboard-header">
+    <h1>Encontre seu pet!</h1>
+    <button class="btn-anuncio">Criar anúncio</button>
+  </header>
+
+  <!-- Container para exibir os pets salvos -->
+  <section class="pet-lista" id="petList">
+    <!-- Os pet cards serão inseridos aqui dinamicamente -->
+  </section>
+
+  <!-- Modal para o formulário (sem inline style para que o CSS o mantenha oculto) -->
+  <!-- Modal para formulário de cadastro/edição -->
+<div id="petFormModal">
+  <div class="modal-overlay"></div>
+  <div class="modal-content">
+    <button class="close-btn" id="closeModal">&times;</button>
+    <form id="petForm">
+      <input type="text" name="petName" placeholder="Nome do animal" required />
+      <input type="number" name="petAge" placeholder="Idade" required />
+      <input type="text" name="petPhone" placeholder="Telefone (WhatsApp)" required />
+      <select name="petSex" required>
+        <option value="">Selecione o sexo</option>
+        <option value="Macho">Macho</option>
+        <option value="Fêmea">Fêmea</option>
+      </select>
+      <!-- Campo oculto para manter a URL da imagem existente -->
+      <input type="hidden" name="existingImageUrl" id="existingImageUrl" />
+      
+      <!-- Campo para upload de nova imagem -->
+      <input type="file" name="imagem" id="imagem" accept="image/*" />
+      <button type="submit">Salvar anúncio</button>
+    </form>
+    
+  </div>
+</div>
+
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
