@@ -1,218 +1,148 @@
 document.addEventListener('DOMContentLoaded', () => {
   const baseUrl = window.location.origin;
-  // Elementos da página
-  const petListContainer = document.getElementById('petList');
-  const btnCriarAnuncio = document.querySelector('.btn-anuncio');
-  const petFormModal = document.getElementById('petFormModal');
-  const petForm = document.getElementById('petForm');
-  const closeModalBtn = document.getElementById('closeModal');
-  const existingImageUrlInput = document.getElementById('existingImageUrl');
+  const token   = localStorage.getItem('token');
+  const admin   = localStorage.getItem('admin') === 'true';
+  const userId  = localStorage.getItem('userId');
 
-  let editId = null; // Para identificar se estamos editando ou criando um anúncio
+  if (!token) {
+    // se não estiver logado, volta pra home
+    return window.location.href = '/';
+  }
 
-  // Obtém o userId e admin do localStorage
-  const loggedUserId = localStorage.getItem('userId');
-  // Observe que, no localStorage, os valores são armazenados como string.
-  const isAdmin = localStorage.getItem('admin') === 'true';
+  // Cabeçalhos comuns com JWT
+  const authHeaders = {
+    'Authorization': 'Bearer ' + token,
+    'Content-Type': 'application/json'
+  };
 
-  // Função que faz fetch dos anúncios do backend
-  async function loadPets() {
+  // Carrega e renderiza anúncios
+  async function loadAnuncios() {
     try {
-      const response = await fetch(`${baseUrl}/anuncios`);
-      if (!response.ok) throw new Error("Erro ao carregar anúncios");
-      return await response.json();
-    } catch (error) {
-      console.error("Erro ao carregar anúncios:", error);
-      return [];
-    }
-  }
-
-  // Função que renderiza todos os anúncios
-  async function renderPets() {
-    const pets = await loadPets();
-    petListContainer.innerHTML = ''; // Limpa o container
-    pets.forEach((pet) => {
-      const mensagem = 'Olá, vi seu anúncio no Adote um Amigo e estou interessado no(a) ' + pet.nome_pet + '! Poderia me passar mais informações?';
-      const urlWhats = "https://wa.me/" + pet.telefone_responsavel + "?text=" + encodeURIComponent(mensagem);
-
-      // Inicialmente, define a ação padrão (apenas o botão de WhatsApp)
-      let acoesHTML = `<a class="btn-whatsapp" target="_blank" href="${urlWhats}">WhatsApp</a>`;
-      
-      // Se o usuário é admin, ou se o anúncio pertence ao usuário comum logado, exibe os botões de editar e excluir
-      if (isAdmin || (pet.usuario && pet.usuario.id.toString() === loggedUserId)) {
-        acoesHTML = `
-          <button class="btn-editar" data-id="${pet.id}">Editar</button>
-          <button class="btn-excluir" data-id="${pet.id}">Excluir</button>
-          ${acoesHTML}
-        `;
-      }
-
-      // Cria o card do anúncio
-      const petCard = document.createElement('div');
-      petCard.classList.add('pet-card');
-      petCard.innerHTML = `
-        <img src="${pet.imagem_url || 'https://placedog.net/400/400'}" alt="${pet.nome_pet}">
-        <div class="pet-info">
-          <h2>${pet.nome_pet} <span class="sexo">${pet.sexo}</span></h2>
-          <span>Idade: ${pet.idade} anos</span>
-          <div class="actions">
-            ${acoesHTML}
-          </div>
-        </div>
-      `;
-      petListContainer.appendChild(petCard);
-    });
-
-    // Adiciona eventos aos botões de editar e excluir, se existirem
-    document.querySelectorAll('.btn-editar').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        editId = e.target.getAttribute('data-id');
-        openEditForm(editId);
+      const res = await fetch(`${baseUrl}/anuncios`, {
+        headers: authHeaders
       });
-    });
-    document.querySelectorAll('.btn-excluir').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const idToRemove = e.target.getAttribute('data-id');
-        excluirPet(idToRemove);
-      });
-    });
-  }
-
-  // Abre o modal para edição pré-preenchendo o formulário com os dados do anúncio
-  async function openEditForm(id) {
-    try {
-      const pets = await loadPets();
-      const pet = pets.find(p => p.id == id);
-      if (pet) {
-        petForm.petName.value = pet.nome_pet;
-        petForm.petAge.value = pet.idade;
-        petForm.petSex.value = pet.sexo;
-        petForm.petPhone.value = pet.telefone_responsavel;
-        // Campo oculto para manter a imagem atual
-        existingImageUrlInput.value = pet.imagem_url || "";
-        petFormModal.classList.add('active');
-      }
-    } catch (error) {
-      console.error("Erro ao buscar anúncio para edição:", error);
+      if (!res.ok) throw new Error('Erro ao carregar anúncios');
+      const lista = await res.json();
+      renderAnuncios(lista);
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
     }
   }
 
-  // Função para excluir o anúncio
-  async function excluirPet(id) {
-    if (confirm('Tem certeza que deseja excluir esse anúncio?')) {
-      try {
-        const response = await fetch(`${baseUrl}/anuncios/${id}`, {
-          method: 'DELETE'
-        });
-        const result = await response.json();
-        console.log(result.msg);
-        await renderPets();
-      } catch (error) {
-        console.error("Erro ao excluir anúncio:", error);
-      }
-    }
-  }
-
-  // Abre o modal para criar novo anúncio
-  btnCriarAnuncio.addEventListener('click', () => {
-    editId = null;
-    petForm.reset();
-    petFormModal.classList.add('active');
-  });
-
-  // Fecha o modal
-  closeModalBtn.addEventListener('click', () => {
-    petFormModal.classList.remove('active');
-  });
-  petFormModal.addEventListener('click', (e) => {
-    if (e.target.classList.contains('modal-overlay')) {
-      petFormModal.classList.remove('active');
-    }
-  });
-
-  // Envio do formulário (para criação ou edição)
-  petForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const petName = petForm.petName.value;
-    const petAge = parseInt(petForm.petAge.value);
-    const petSex = petForm.petSex.value;
-    const petPhone = petForm.petPhone.value;
-    // Usa o ID do usuário logado para enviar com o anúncio
-    const usuarioId = parseInt(loggedUserId);
-    let image_url = "";
-
-    const imageInput = document.getElementById('imagem');
-    if (imageInput && imageInput.files && imageInput.files[0]) {
-      const formData = new FormData();
-      formData.append('imagem', imageInput.files[0]);
-      try {
-        const responseUpload = await fetch(`${baseUrl}/upload-imagem`, {
-          method: 'POST',
-          body: formData
-        });
-        const dataUpload = await responseUpload.json();
-        if (responseUpload.ok) {
-          image_url = dataUpload.image_url;
-        } else {
-          console.error("Erro no upload da imagem:", dataUpload.erro);
+  // Exibe os cards na tela
+  function renderAnuncios(anuncios) {
+    const container = document.getElementById('petList');
+    container.innerHTML = '';
+    anuncios.forEach(a => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <img src="${a.imagem ? a.imagem : '/static/img/placeholder.png'}" alt="${a.titulo}" />
+        <h3>${a.titulo}</h3>
+        <p>Idade: ${a.idade} | Sexo: ${a.sexo}</p>
+        <p>☎️ ${a.telefone}</p>
+        <a href="https://wa.me/${a.telefone.replace(/\D/g,'')}" target="_blank">WhatsApp</a>
+        ${admin || a.usuario_id === userId 
+          ? `<button data-id="${a.id}" class="edit-btn">Editar</button>
+             <button data-id="${a.id}" class="del-btn">Excluir</button>` 
+          : ''
         }
-      } catch (error) {
-        console.error("Erro ao enviar imagem:", error);
-      }
-    } else {
-      // Se estiver editando e não tiver selecionado nova imagem, usa a atual
-      if (editId) {
-        image_url = existingImageUrlInput.value;
-      }
-    }
+      `;
+      container.appendChild(card);
+    });
+    attachCardEvents();
+  }
 
-    // Se editId não for nulo, atualiza o anúncio; caso contrário, cria um novo
-    if (editId) {
-      try {
-        const response = await fetch(`http://127.0.0.1:5000/anuncios/${editId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nome_pet: petName,
-            idade: petAge,
-            sexo: petSex,
-            imagem_url: image_url,
-            telefone_responsavel: petPhone
-          })
-        });
-        const result = await response.json();
-        console.log(result.msg);
-      } catch (error) {
-        console.error("Erro ao atualizar anúncio:", error);
-      }
-      editId = null;
-    } else {
-      try {
-        const response = await fetch(`${baseUrl}/anuncios`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nome_pet: petName,
-            idade: petAge,
-            sexo: petSex,
-            imagem_url: image_url,
-            telefone_responsavel: petPhone,
-            usuario_id: usuarioId
-          })
-        });
-        const result = await response.json();
-        console.log(result.msg);
-      } catch (error) {
-        console.error("Erro ao criar anúncio:", error);
-      }
-    }
+  // Associa editar/excluir em cada card
+  function attachCardEvents() {
+    document.querySelectorAll('.del-btn').forEach(btn => {
+      btn.onclick = async () => {
+        if (!confirm('Confirma exclusão?')) return;
+        const id = btn.dataset.id;
+        try {
+          const res = await fetch(`${baseUrl}/anuncios/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+          if (!res.ok) throw new Error('Falha ao excluir');
+          loadAnuncios();
+        } catch (err) {
+          console.error(err);
+          alert(err.message);
+        }
+      };
+    });
 
-    petFormModal.classList.remove('active');
-    petForm.reset();
-    await renderPets();
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.onclick = () => {
+        // Aqui você pode abrir seu modal de edição e preencher campos com os dados
+        // para então chamar updateAnuncio(id, payload)
+      };
+    });
+  }
+
+  // Upload de imagem antes de criar
+  async function uploadImagem(file) {
+    const fd = new FormData();
+    fd.append('imagem', file);
+    const res = await fetch(`${baseUrl}/upload-imagem`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: fd
+    });
+    if (!res.ok) throw new Error('Erro no upload da imagem');
+    const json = await res.json();
+    return json.image_url;
+  }
+
+  // Criação de anúncio via JSON
+  async function createAnuncio(e) {
+    e.preventDefault();
+    try {
+      const form = document.getElementById('petForm');
+      const fileInput = document.getElementById('imagem');
+      let imgUrl = '';
+
+      if (fileInput.files.length) {
+        imgUrl = await uploadImagem(fileInput.files[0]);
+      }
+
+      const payload = {
+        titulo: form.titulo.value,
+        descricao: form.descricao.value,
+        idade: form.idade.value,
+        sexo: form.sexo.value,
+        telefone_responsavel: form.telefone.value,
+        imagem_url: imgUrl
+      };
+
+      const res = await fetch(`${baseUrl}/anuncios`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('Erro ao criar anúncio');
+      form.reset();
+      loadAnuncios();
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    }
+  }
+
+  // Associa o submit do formulário de criação
+  const petForm = document.getElementById('petForm');
+  if (petForm) {
+    petForm.addEventListener('submit', createAnuncio);
+  }
+
+  // Logout simples
+  document.getElementById('logoutBtn')?.addEventListener('click', () => {
+    localStorage.clear();
+    window.location.href = '/';
   });
 
-  // Renderiza os anúncios na carga inicial
-  renderPets();
+  // Chama inicialmente
+  loadAnuncios();
 });
