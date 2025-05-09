@@ -2,26 +2,43 @@ document.addEventListener('DOMContentLoaded', () => {
   const baseUrl = window.location.origin;
   const token   = localStorage.getItem('token');
   const admin   = localStorage.getItem('admin') === 'true';
-  const userId  = localStorage.getItem('userId');
+  const userId  = parseInt(localStorage.getItem('userId'), 10);
 
+  // Se não estiver autenticado, volta à home
   if (!token) {
-    // se não estiver logado, volta pra home
-    return window.location.href = '/';
+    window.location.href = '/';
+    return;
   }
 
-  // Cabeçalhos comuns com JWT
-  const authHeaders = {
-    'Authorization': 'Bearer ' + token,
+  // Headers comuns com JWT
+  const jsonHeaders = {
+    'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'
   };
 
-  // Carrega e renderiza anúncios
+  // --- Modal de criação de anúncio ---
+  const btnCriarAnuncio = document.querySelector('.btn-anuncio');
+  const petFormModal    = document.getElementById('petFormModal');
+  const closeModalBtn   = document.getElementById('closeModalBtn');
+
+  if (btnCriarAnuncio && petFormModal) {
+    btnCriarAnuncio.addEventListener('click', () => {
+      petFormModal.style.display = 'block';
+    });
+  }
+  if (closeModalBtn && petFormModal) {
+    closeModalBtn.addEventListener('click', () => {
+      petFormModal.style.display = 'none';
+    });
+  }
+
+  // --- Carregar anúncios e renderizar cards ---
   async function loadAnuncios() {
     try {
       const res = await fetch(`${baseUrl}/anuncios`, {
-        headers: authHeaders
+        headers: jsonHeaders
       });
-      if (!res.ok) throw new Error('Erro ao carregar anúncios');
+      if (!res.ok) throw new Error(`Erro ${res.status} ao carregar anúncios`);
       const lista = await res.json();
       renderAnuncios(lista);
     } catch (err) {
@@ -30,7 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Exibe os cards na tela
   function renderAnuncios(anuncios) {
     const container = document.getElementById('petList');
     container.innerHTML = '';
@@ -38,23 +54,21 @@ document.addEventListener('DOMContentLoaded', () => {
       const card = document.createElement('div');
       card.className = 'card';
       card.innerHTML = `
-        <img src="${a.imagem ? a.imagem : '/static/img/placeholder.png'}" alt="${a.titulo}" />
+        <img src="${a.imagem||'/static/img/placeholder.png'}" alt="${a.titulo}" />
         <h3>${a.titulo}</h3>
         <p>Idade: ${a.idade} | Sexo: ${a.sexo}</p>
         <p>☎️ ${a.telefone}</p>
         <a href="https://wa.me/${a.telefone.replace(/\D/g,'')}" target="_blank">WhatsApp</a>
-        ${admin || a.usuario_id === userId 
-          ? `<button data-id="${a.id}" class="edit-btn">Editar</button>
-             <button data-id="${a.id}" class="del-btn">Excluir</button>` 
-          : ''
-        }
+        ${(admin||a.usuario_id===userId) ? `
+          <button class="edit-btn" data-id="${a.id}">Editar</button>
+          <button class="del-btn" data-id="${a.id}">Excluir</button>
+        `: ''}
       `;
       container.appendChild(card);
     });
     attachCardEvents();
   }
 
-  // Associa editar/excluir em cada card
   function attachCardEvents() {
     document.querySelectorAll('.del-btn').forEach(btn => {
       btn.onclick = async () => {
@@ -63,9 +77,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           const res = await fetch(`${baseUrl}/anuncios/${id}`, {
             method: 'DELETE',
-            headers: { 'Authorization': 'Bearer ' + token }
+            headers: { 'Authorization': `Bearer ${token}` }
           });
-          if (!res.ok) throw new Error('Falha ao excluir');
+          if (!res.ok) throw new Error(`Erro ${res.status} ao excluir`);
           loadAnuncios();
         } catch (err) {
           console.error(err);
@@ -76,33 +90,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.edit-btn').forEach(btn => {
       btn.onclick = () => {
-        // Aqui você pode abrir seu modal de edição e preencher campos com os dados
-        // para então chamar updateAnuncio(id, payload)
+        // TODO: implementar abrir modal de edição e preencher campos
       };
     });
   }
 
-  // Upload de imagem antes de criar
+  // --- Upload de imagem ---
   async function uploadImagem(file) {
     const fd = new FormData();
     fd.append('imagem', file);
     const res = await fetch(`${baseUrl}/upload-imagem`, {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token },
+      headers: { 'Authorization': `Bearer ${token}` },
       body: fd
     });
-    if (!res.ok) throw new Error('Erro no upload da imagem');
+    if (!res.ok) throw new Error(`Erro ${res.status} no upload de imagem`);
     const json = await res.json();
     return json.image_url;
   }
 
-  // Criação de anúncio via JSON
+  // --- Criar anúncio ---
   async function createAnuncio(e) {
     e.preventDefault();
     try {
-      const form = document.getElementById('petForm');
+      const form      = document.getElementById('petForm');
       const fileInput = document.getElementById('imagem');
-      let imgUrl = '';
+      let   imgUrl    = '';
 
       if (fileInput.files.length) {
         imgUrl = await uploadImagem(fileInput.files[0]);
@@ -119,11 +132,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const res = await fetch(`${baseUrl}/anuncios`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: jsonHeaders,
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error('Erro ao criar anúncio');
+      if (!res.ok) {
+        const msg = await res.text().catch(()=>null);
+        throw new Error(`Erro ${res.status}: ${msg||res.statusText}`);
+      }
       form.reset();
+      petFormModal.style.display = 'none';
       loadAnuncios();
     } catch (err) {
       console.error(err);
@@ -131,18 +148,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Associa o submit do formulário de criação
   const petForm = document.getElementById('petForm');
-  if (petForm) {
-    petForm.addEventListener('submit', createAnuncio);
-  }
+  if (petForm) petForm.addEventListener('submit', createAnuncio);
 
-  // Logout simples
+  // --- Logout ---
   document.getElementById('logoutBtn')?.addEventListener('click', () => {
     localStorage.clear();
     window.location.href = '/';
   });
 
-  // Chama inicialmente
+  // Inicial
   loadAnuncios();
 });
