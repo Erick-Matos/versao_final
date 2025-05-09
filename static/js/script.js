@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('admin', data.admin);
         localStorage.setItem('userId', data.user_id);
         // Redireciona automaticamente para o dashboard sem exibir alert
-        window.location.href = "dashboard.html";
+        window.location.href = "/dashboard";
       } else {
         alert(data.msg || "E-mail ou senha incorretos!");
       }
