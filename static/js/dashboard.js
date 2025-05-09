@@ -2,161 +2,110 @@ document.addEventListener('DOMContentLoaded', () => {
   const baseUrl = window.location.origin;
   const token   = localStorage.getItem('token');
   const admin   = localStorage.getItem('admin') === 'true';
-  const userId  = parseInt(localStorage.getItem('userId'), 10);
+  const userId  = parseInt(localStorage.getItem('userId'),10);
 
-  // Se não estiver autenticado, volta à home
-  if (!token) {
-    window.location.href = '/';
-    return;
-  }
+  if (!token) return window.location.href = '/';
 
-  // Headers comuns com JWT
   const jsonHeaders = {
     'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'
   };
 
-  // --- Modal de criação de anúncio ---
-  const btnCriarAnuncio = document.querySelector('.btn-anuncio');
-  const petFormModal    = document.getElementById('petFormModal');
-  const closeModalBtn   = document.getElementById('closeModalBtn');
+  // Modal
+  const btnCriar   = document.querySelector('.btn-anuncio');
+  const modal      = document.getElementById('petFormModal');
+  const closeModal = document.getElementById('closeModalBtn');
+  btnCriar?.addEventListener('click', ()=> modal.style.display='block');
+  closeModal?.addEventListener('click', ()=> modal.style.display='none');
 
-  if (btnCriarAnuncio && petFormModal) {
-    btnCriarAnuncio.addEventListener('click', () => {
-      petFormModal.style.display = 'block';
-    });
-  }
-  if (closeModalBtn && petFormModal) {
-    closeModalBtn.addEventListener('click', () => {
-      petFormModal.style.display = 'none';
-    });
-  }
-
-  // --- Carregar anúncios e renderizar cards ---
+  // Carrega anúncios
   async function loadAnuncios() {
     try {
-      const res = await fetch(`${baseUrl}/anuncios`, {
-        headers: jsonHeaders
-      });
-      if (!res.ok) throw new Error(`Erro ${res.status} ao carregar anúncios`);
-      const lista = await res.json();
-      renderAnuncios(lista);
-    } catch (err) {
-      console.error(err);
-      alert(err.message);
+      const r = await fetch(`${baseUrl}/anuncios`, { headers: jsonHeaders });
+      if (!r.ok) throw new Error(`Erro ${r.status}`);
+      renderAnuncios(await r.json());
+    } catch(e) {
+      alert(e.message);
     }
   }
 
-  function renderAnuncios(anuncios) {
-    const container = document.getElementById('petList');
-    container.innerHTML = '';
-    anuncios.forEach(a => {
+  function renderAnuncios(list) {
+    const cont = document.getElementById('petList');
+    cont.innerHTML = '';
+    list.forEach(a => {
       const card = document.createElement('div');
       card.className = 'card';
       card.innerHTML = `
-        <img src="${a.imagem||'/static/img/placeholder.png'}" alt="${a.titulo}" />
+        <img src="${a.imagem||'/static/img/placeholder.png'}"/>
         <h3>${a.titulo}</h3>
         <p>Idade: ${a.idade} | Sexo: ${a.sexo}</p>
         <p>☎️ ${a.telefone}</p>
         <a href="https://wa.me/${a.telefone.replace(/\D/g,'')}" target="_blank">WhatsApp</a>
-        ${(admin||a.usuario_id===userId) ? `
-          <button class="edit-btn" data-id="${a.id}">Editar</button>
-          <button class="del-btn" data-id="${a.id}">Excluir</button>
-        `: ''}
+        ${(admin||a.usuario_id===userId) ? 
+          `<button class="del-btn" data-id="${a.id}">❌</button>` : ''}
       `;
-      container.appendChild(card);
+      cont.appendChild(card);
     });
-    attachCardEvents();
-  }
-
-  function attachCardEvents() {
-    document.querySelectorAll('.del-btn').forEach(btn => {
-      btn.onclick = async () => {
-        if (!confirm('Confirma exclusão?')) return;
-        const id = btn.dataset.id;
-        try {
-          const res = await fetch(`${baseUrl}/anuncios/${id}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (!res.ok) throw new Error(`Erro ${res.status} ao excluir`);
-          loadAnuncios();
-        } catch (err) {
-          console.error(err);
-          alert(err.message);
-        }
-      };
-    });
-
-    document.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.onclick = () => {
-        // TODO: implementar abrir modal de edição e preencher campos
+    // Excluir
+    document.querySelectorAll('.del-btn').forEach(b=>{
+      b.onclick = async ()=>{
+        if(!confirm('Excluir?'))return;
+        const id = b.dataset.id;
+        await fetch(`${baseUrl}/anuncios/${id}`, {
+          method:'DELETE', headers:{'Authorization':`Bearer ${token}`}
+        });
+        loadAnuncios();
       };
     });
   }
 
-  // --- Upload de imagem ---
+  // Upload de imagem
   async function uploadImagem(file) {
     const fd = new FormData();
     fd.append('imagem', file);
-    const res = await fetch(`${baseUrl}/upload-imagem`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body: fd
+    const r = await fetch(`${baseUrl}/upload-imagem`, {
+      method:'POST',
+      headers:{ 'Authorization': `Bearer ${token}` },
+      body:fd
     });
-    if (!res.ok) throw new Error(`Erro ${res.status} no upload de imagem`);
-    const json = await res.json();
-    return json.image_url;
+    if (!r.ok) throw new Error(`Erro ${r.status} upload`);
+    return (await r.json()).image_url;
   }
 
-  // --- Criar anúncio ---
+  // Cria anúncio
   async function createAnuncio(e) {
     e.preventDefault();
-    try {
-      const form      = document.getElementById('petForm');
-      const fileInput = document.getElementById('imagem');
-      let   imgUrl    = '';
+    const form    = document.getElementById('petForm');
+    const fileIn  = document.getElementById('imagem');
+    let   imgUrl  = '';
 
-      if (fileInput.files.length) {
-        imgUrl = await uploadImagem(fileInput.files[0]);
-      }
-
-      const payload = {
-        titulo: form.titulo.value,
-        descricao: form.descricao.value,
-        idade: form.idade.value,
-        sexo: form.sexo.value,
-        telefone_responsavel: form.telefone.value,
-        imagem_url: imgUrl
-      };
-
-      const res = await fetch(`${baseUrl}/anuncios`, {
-        method: 'POST',
-        headers: jsonHeaders,
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) {
-        const msg = await res.text().catch(()=>null);
-        throw new Error(`Erro ${res.status}: ${msg||res.statusText}`);
-      }
-      form.reset();
-      petFormModal.style.display = 'none';
-      loadAnuncios();
-    } catch (err) {
-      console.error(err);
-      alert(err.message);
+    if (fileIn.files.length) {
+      imgUrl = await uploadImagem(fileIn.files[0]);
     }
+
+    // lê pelos name=... do form
+    const f = form.elements;
+    const payload = {
+      titulo: f['titulo'].value,
+      descricao: f['descricao'].value,
+      idade: f['idade'].value,
+      sexo: f['sexo'].value,
+      telefone_responsavel: f['telefone'].value,
+      imagem_url: imgUrl
+    };
+
+    const r = await fetch(`${baseUrl}/anuncios`, {
+      method:'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(payload)
+    });
+    if (!r.ok) throw new Error(`Erro ${r.status}`);
+    form.reset();
+    modal.style.display = 'none';
+    loadAnuncios();
   }
 
-  const petForm = document.getElementById('petForm');
-  if (petForm) petForm.addEventListener('submit', createAnuncio);
+  document.getElementById('petForm')?.addEventListener('submit', createAnuncio);
 
-  // --- Logout ---
-  document.getElementById('logoutBtn')?.addEventListener('click', () => {
-    localStorage.clear();
-    window.location.href = '/';
-  });
-
-  // Inicial
   loadAnuncios();
 });
