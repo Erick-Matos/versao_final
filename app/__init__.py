@@ -4,14 +4,12 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 
-# Initialize extensions
 db = SQLAlchemy()
 migrate = Migrate()
 
-
 def create_app():
-    # Como __name__ é 'app', o root_path será .../app
-    # Então "../templates" aponta para <project_root>/templates
+    # Como __name__ é 'app', root_path=/app,
+    # então '../templates' e '../static' apontam para as pastas na raiz do projeto
     app = Flask(
         __name__,
         static_folder='../static',
@@ -22,10 +20,10 @@ def create_app():
 
     # CORS
     origins = app.config.get('CORS_ORIGINS', '')
-    origins = origins.split(',') if origins else ['*']
-    CORS(app, origins=origins)
+    origins_list = origins.split(',') if origins else ['*']
+    CORS(app, origins=origins_list)
 
-    # Database + migrations
+    # Banco e migrações
     db.init_app(app)
     migrate.init_app(app, db)
 
@@ -35,17 +33,16 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(anuncios_bp)
 
-    # Cria tabelas e admin (se configurado)
+    # Criação de tabelas e admin (se configurado)
     with app.app_context():
         db.create_all()
-
         from werkzeug.security import generate_password_hash
         from app.models import Usuario
 
-        admin_email = os.getenv('ADMIN_EMAIL')
+        admin_email    = os.getenv('ADMIN_EMAIL')
         admin_password = os.getenv('ADMIN_PASSWORD')
-        admin_phone = os.getenv('ADMIN_PHONE', os.getenv('ADMIN_TELEFONE', '0000000000'))
-        admin_name = os.getenv('ADMIN_NAME', 'admin')
+        admin_phone    = os.getenv('ADMIN_PHONE', os.getenv('ADMIN_TELEFONE', '0000000000'))
+        admin_name     = os.getenv('ADMIN_NAME', 'admin')
 
         if admin_email and admin_password:
             if not Usuario.query.filter_by(email=admin_email).first():
@@ -60,7 +57,7 @@ def create_app():
                 db.session.add(admin)
                 db.session.commit()
 
-    # Rotas principais
+    # Rotas estáticas de front  
     @app.route('/')
     def home():
         return render_template('index.html')
